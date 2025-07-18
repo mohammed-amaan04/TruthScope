@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Veritas Fact Checker</title>
+    <style>
+        body {
+            width: 350px;
+            min-height: 400px;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8f9fa;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .tagline {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 20px;
+        }
+        
+        .section {
+            margin-bottom: 20px;
+        }
+        
+        .section h3 {
+            margin: 0 0 12px 0;
+            color: #374151;
+            font-size: 16px;
+        }
+        
+        .instructions {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .instructions ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .instructions li {
+            margin-bottom: 8px;
+            color: #4b5563;
+            font-size: 14px;
+        }
+        
+        .status {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            text-align: center;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .status-online {
+            background: #22c55e;
+        }
+        
+        .status-offline {
+            background: #ef4444;
+        }
+        
+        .status-text {
+            font-size: 14px;
+            color: #4b5563;
+        }
+        
+        .test-area {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .test-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 14px;
+            margin-bottom: 12px;
+            box-sizing: border-box;
+        }
+        
+        .test-button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            width: 100%;
+        }
+        
+        .test-button:hover {
+            background: #5a67d8;
+        }
+        
+        .test-button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 16px;
+            color: #6b7280;
+            font-size: 12px;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">🔍 Veritas</div>
+        <div class="tagline">AI-Powered Fact Checking</div>
+    </div>
+    
+    <div class="content">
+        <div class="section">
+            <h3>How to Use</h3>
+            <div class="instructions">
+                <ol>
+                    <li>Highlight any text on a webpage</li>
+                    <li>Right-click and select "🔍 Fact-check with Veritas"</li>
+                    <li>View the results in the popup that appears</li>
+                </ol>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>API Status</h3>
+            <div class="status">
+                <span class="status-indicator" id="statusIndicator"></span>
+                <span class="status-text" id="statusText">Checking connection...</span>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>Quick Test</h3>
+            <div class="test-area">
+                <input 
+                    type="text" 
+                    class="test-input" 
+                    id="testInput" 
+                    placeholder="Enter a claim to test..."
+                    value="The Earth is round"
+                >
+                <button class="test-button" id="testButton">Test Fact Check</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>Powered by <a href="#" target="_blank">Veritas API</a></p>
+        <p>Version 1.0.0</p>
+    </div>
+    
+    <script src="popup.js"></script>
+</body>
+</html>

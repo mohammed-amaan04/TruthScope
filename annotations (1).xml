@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Annotations>
+
+  <!-- 🌍 Global News -->
+  <Annotation about="www.bbc.com/news*" ... />
+  <Annotation about="www.reuters.com/" ... />
+  <Annotation about="edition.cnn.com/" ... />
+  <Annotation about="www.aljazeera.com/" ... />
+  <Annotation about="www.theguardian.com/international*" ... />
+  <Annotation about="apnews.com/" ... />
+
+  <!-- 🇮🇳 Local to India (National) -->
+  <Annotation about="www.thehindu.com/" ... />
+  <Annotation about="timesofindia.indiatimes.com/" ... />
+  <Annotation about="indianexpress.com/" ... />
+  <Annotation about="scroll.in/" ... />
+  <Annotation about="www.hindustantimes.com/" ... />
+  <Annotation about="www.news18.com/" ... />
+
+  <!-- 📰 Local to Hyderabad -->
+  <Annotation about="telanganatoday.com/" ... />
+  <Annotation about="www.siasat.com/" ... />
+  <Annotation about="www.deccanchronicle.com/nation/current-affairs*" ... />
+  <Annotation about="www.ntnews.com/" ... />
+  <Annotation about="www.eenadu.net/" ... />
+
+  <!-- 💼 Business News -->
+  <Annotation about="economictimes.indiatimes.com/" ... />
+  <Annotation about="www.moneycontrol.com/" ... />
+  <Annotation about="www.business-standard.com/" ... />
+  <Annotation about="www.bloomberg.com/*" ... />
+  <Annotation about="www.cnbc.com/world/?region=world" ... />
+  <Annotation about="www.livemint.com/" ... />
+
+  <!-- ⚽ Sports News -->
+  <Annotation about="www.espn.in/" ... />
+  <Annotation about="www.cricbuzz.com/" ... />
+  <Annotation about="www.sportskeeda.com/" ... />
+  <Annotation about="sports.ndtv.com/" ... />
+  <Annotation about="www.olympics.com/en*" ... />
+  <Annotation about="www.bbc.com/sport*" ... />
+
+</Annotations>
