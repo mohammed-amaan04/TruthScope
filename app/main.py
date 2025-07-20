@@ -2,7 +2,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import verification
+from app.api.v1 import verification, news
 from app.core.config import settings
 
 # Initialize app
@@ -35,6 +35,12 @@ app.include_router(
     verification.router,
     prefix="/api/v1/verify",
     tags=["Verification"]
+)
+
+app.include_router(
+    news.router,
+    prefix="/api/v1",
+    tags=["News"]
 )
 
 # Root endpoint

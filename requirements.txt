@@ -5,7 +5,7 @@ pydantic==2.*
 pydantic-settings==2.*
 
 # NLP and ML libraries
-spacy==3.7.*
+# spacy==3.7.* --prefer-binary
 sentence-transformers==2.*
 torch>=2.0.0
 transformers==4.*

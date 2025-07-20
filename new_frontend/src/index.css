@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Newspaper Theme - Global Styles */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
+
+:root {
+  --newspaper-black: #1a1a1a;
+  --newspaper-gray: #4a4a4a;
+  --newspaper-light-gray: #f5f5f5;
+  --newspaper-border: #d1d1d1;
+  --newspaper-accent: #8b0000;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Crimson Text', serif;
+  line-height: 1.6;
+  color: var(--newspaper-black);
+  background-color: #fafafa;
+}
+
+/* Newspaper Typography */
+.newspaper-headline {
+  font-family: 'Playfair Display', serif;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  line-height: 1.1;
+}
+
+.newspaper-subheading {
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.newspaper-body {
+  font-family: 'Crimson Text', serif;
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.newspaper-caption {
+  font-family: 'Crimson Text', serif;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--newspaper-gray);
+}
+
+/* Newspaper Layout Elements */
+.newspaper-border {
+  border: 2px solid var(--newspaper-black);
+}
+
+.newspaper-divider {
+  height: 2px;
+  background-color: var(--newspaper-black);
+  margin: 1rem 0;
+}
+
+.newspaper-column {
+  column-count: 2;
+  column-gap: 2rem;
+  column-rule: 1px solid var(--newspaper-border);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--newspaper-light-gray);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--newspaper-gray);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--newspaper-black);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.6s ease-out;
+}
+
+.slide-in {
+  animation: slideIn 0.8s ease-out;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .newspaper-column {
+    column-count: 1;
+  }
+  
+  .newspaper-headline {
+    font-size: 1.5rem;
+    letter-spacing: 1px;
+  }
+}
