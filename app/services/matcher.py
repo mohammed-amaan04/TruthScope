@@ -1,9 +1,26 @@
 import logging
 from typing import List, Tuple
-from sentence_transformers import SentenceTransformer, util
 
 logger = logging.getLogger(__name__)
-model = SentenceTransformer("all-MiniLM-L6-v2")
+
+# Safe import for sentence-transformers
+try:
+    from sentence_transformers import SentenceTransformer, util
+    _st_available = True
+except Exception as e:
+    logger.warning(f"SentenceTransformer unavailable; using SequenceMatcher similarity. Reason: {e}")
+    SentenceTransformer = None  # type: ignore
+    util = None  # type: ignore
+    _st_available = False
+
+# Initialize embedding model if available
+model = None
+if _st_available:
+    try:
+        model = SentenceTransformer("all-MiniLM-L6-v2")
+    except Exception as e:
+        logger.warning(f"Failed to load embedding model; fallback to SequenceMatcher: {e}")
+        model = None
 
 # Try to load an NLI cross-encoder for entailment/contradiction
 try:
@@ -23,6 +40,21 @@ def _has_negation(text: str) -> bool:
     return any(tok in words for tok in NEGATION_TOKENS)
 
 
+def _similarity(claim: str, text: str) -> float:
+    """Compute similarity in [0,1] using embeddings when available; otherwise SequenceMatcher."""
+    if model is not None and util is not None:
+        try:
+            claim_emb = model.encode(claim[:512], convert_to_tensor=True)
+            text_emb = model.encode(text[:1024], convert_to_tensor=True)
+            sim = float(util.cos_sim(claim_emb, text_emb)[0])
+            # cos_sim outputs approximately [0,1] for semantically close pairs; clamp
+            return max(0.0, min(1.0, sim))
+        except Exception as e:
+            logger.warning(f"Embedding similarity failed; falling back: {e}")
+    from difflib import SequenceMatcher
+    return SequenceMatcher(a=claim.lower(), b=text.lower()).ratio()
+
+
 def _classify_stance(claim: str, text: str) -> float:
     """
     Return stance score in [-1, 1]: >0 support, <0 contradict, ~0 neutral.
@@ -30,12 +62,10 @@ def _classify_stance(claim: str, text: str) -> float:
     """
     if NLI_AVAILABLE and nli_model is not None:
         try:
-            scores = nli_model.predict([(claim, text)])  # shape: [3] for NLI
-            # Heuristic: map indices by typical order [contradiction, entailment, neutral]
-            if len(scores.shape) == 1 and scores.shape[0] == 3:
+            scores = nli_model.predict([(claim, text)])
+            if hasattr(scores, 'shape') and len(scores.shape) == 1 and scores.shape[0] == 3:
                 c, e, n = float(scores[0]), float(scores[1]), float(scores[2])
             else:
-                # Fallback: treat scalar/regression as support probability
                 c, e, n = 0.0, float(scores[0]) if hasattr(scores, '__len__') else float(scores), 0.0
             if e >= c and e >= n:
                 return min(1.0, e)
@@ -45,23 +75,16 @@ def _classify_stance(claim: str, text: str) -> float:
         except Exception as e:
             logger.warning(f"NLI prediction failed, using heuristic: {e}")
 
-    # Heuristic fallback: combine cosine similarity and negation mismatch
     claim_neg = _has_negation(claim)
     text_neg = _has_negation(text)
-    # Similarity for direction scaling
-    # encode short text to avoid heavy compute
-    claim_emb = model.encode(claim[:512], convert_to_tensor=True)
-    text_emb = model.encode(text[:1024], convert_to_tensor=True)
-    sim = float(util.cos_sim(claim_emb, text_emb)[0])  # [-1, 1] but generally [0,1]
+    sim = _similarity(claim, text)
 
-    if claim_neg != text_neg:
-        # Strong contradiction when negation polarity differs and content is similar
-        return -min(1.0, max(0.0, sim))
-    # Otherwise treat as supporting if reasonably similar
+    if claim_neg != text_neg and sim >= 0.5:
+        return -min(1.0, sim)
     if sim > 0.6:
         return min(1.0, sim)
     if sim < 0.4:
-        return -min(1.0, 0.5 * (0.4 - sim))  # slight contradiction tendency when far
+        return -min(1.0, 0.5 * (0.4 - sim))
     return 0.0
 
 
@@ -86,16 +109,11 @@ def match_articles(claim: str, articles: List[dict]) -> Tuple[List[dict], List[d
         if not text:
             continue
 
-        # Deduplicate near-identical titles
         if any(_is_duplicate(title, t) for t in seen_titles):
             continue
 
         stance_score = _classify_stance(claim, text)
-
-        # Compute similarity for reference and weighting
-        claim_embedding = model.encode(claim[:512], convert_to_tensor=True)
-        embedding = model.encode(text[:1024], convert_to_tensor=True)
-        sim_score = float(util.cos_sim(claim_embedding, embedding)[0])
+        sim_score = _similarity(claim, text)
 
         article["similarity_score"] = round(sim_score, 4)
         article["stance_score"] = round(stance_score, 4)
@@ -109,14 +127,12 @@ def match_articles(claim: str, articles: List[dict]) -> Tuple[List[dict], List[d
             contradict.append(article)
             seen_titles.append(title)
         else:
-            # Keep neutral only if very similar to help later decisions
             if sim_score >= 0.7:
                 support.append(article)
                 seen_titles.append(title)
 
     if not support and not contradict:
         logger.warning("[MATCHER] No strong matches — returning top-N closest articles instead")
-        # Sort by similarity and return a few as supporting context
         articles.sort(key=lambda x: x.get("similarity_score", 0.0), reverse=True)
         return articles[:5], []
 
