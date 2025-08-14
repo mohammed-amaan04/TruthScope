@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import NewsDashboard from '../components/NewsDashboard'
+import { Suspense, lazy } from 'react'
 import FactCheckInput from '../components/FactCheckInput'
+
+const NewsDashboard = lazy(() => import('../components/NewsDashboard'))
 
 const HomePage = () => {
   const navigate = useNavigate()
@@ -43,7 +45,9 @@ const HomePage = () => {
             <h2 className="newspaper-subheading-bold text-3xl text-center mb-6 text-newspaper-black">
               TODAY'S TOP STORIES
             </h2>
-            <NewsDashboard />
+            <Suspense fallback={<div className="p-4 text-center text-newspaper-gray">Loading news...</div>}>
+              <NewsDashboard />
+            </Suspense>
           </div>
         </section>
 
