@@ -1,36 +1,51 @@
 import logging
+import os
 from typing import List, Tuple
 
 logger = logging.getLogger(__name__)
 
+ENABLE_EMBEDDINGS = os.getenv("ENABLE_EMBEDDINGS", "0") == "1"
+ENABLE_NLI = os.getenv("ENABLE_NLI", "0") == "1"
+
 # Safe import for sentence-transformers
 try:
-    from sentence_transformers import SentenceTransformer, util
-    _st_available = True
+    if ENABLE_EMBEDDINGS:
+        from sentence_transformers import SentenceTransformer, util  # type: ignore
+    else:
+        SentenceTransformer = None  # type: ignore
+        util = None  # type: ignore
 except Exception as e:
     logger.warning(f"SentenceTransformer unavailable; using SequenceMatcher similarity. Reason: {e}")
     SentenceTransformer = None  # type: ignore
     util = None  # type: ignore
-    _st_available = False
 
-# Initialize embedding model if available
-model = None
-if _st_available:
-    try:
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-    except Exception as e:
-        logger.warning(f"Failed to load embedding model; fallback to SequenceMatcher: {e}")
-        model = None
+_model = None
 
-# Try to load an NLI cross-encoder for entailment/contradiction
-try:
-    from sentence_transformers import CrossEncoder  # type: ignore
-    nli_model = CrossEncoder('cross-encoder/nli-deberta-v3-base')
-    NLI_AVAILABLE = True
-except Exception as e:
-    logger.warning(f"NLI CrossEncoder unavailable, using heuristic stance detection. Reason: {e}")
-    nli_model = None
-    NLI_AVAILABLE = False
+def _get_embedding_model():
+    global _model
+    if _model is None and SentenceTransformer is not None and ENABLE_EMBEDDINGS:
+        try:
+            _model = SentenceTransformer("all-MiniLM-L6-v2")
+        except Exception as e:
+            logger.warning(f"Failed to load embedding model; fallback to SequenceMatcher: {e}")
+            _model = None
+    return _model
+
+# Try to load an NLI cross-encoder for entailment/contradiction lazily
+_nli_model = None
+
+def _get_nli_model():
+    global _nli_model
+    if not ENABLE_NLI:
+        return None
+    if _nli_model is None:
+        try:
+            from sentence_transformers import CrossEncoder  # type: ignore
+            _nli_model = CrossEncoder('cross-encoder/nli-deberta-v3-base')
+        except Exception as e:
+            logger.warning(f"NLI CrossEncoder unavailable, using heuristic stance detection. Reason: {e}")
+            _nli_model = None
+    return _nli_model
 
 NEGATION_TOKENS = {"not", "no", "never", "without", "false", "deny", "denies", "refute", "refutes", "debunk", "myth"}
 
@@ -41,13 +56,13 @@ def _has_negation(text: str) -> bool:
 
 
 def _similarity(claim: str, text: str) -> float:
-    """Compute similarity in [0,1] using embeddings when available; otherwise SequenceMatcher."""
+    """Compute similarity in [0,1] using embeddings when enabled; otherwise SequenceMatcher."""
+    model = _get_embedding_model()
     if model is not None and util is not None:
         try:
             claim_emb = model.encode(claim[:512], convert_to_tensor=True)
             text_emb = model.encode(text[:1024], convert_to_tensor=True)
             sim = float(util.cos_sim(claim_emb, text_emb)[0])
-            # cos_sim outputs approximately [0,1] for semantically close pairs; clamp
             return max(0.0, min(1.0, sim))
         except Exception as e:
             logger.warning(f"Embedding similarity failed; falling back: {e}")
@@ -58,9 +73,10 @@ def _similarity(claim: str, text: str) -> float:
 def _classify_stance(claim: str, text: str) -> float:
     """
     Return stance score in [-1, 1]: >0 support, <0 contradict, ~0 neutral.
-    Prefer NLI if available; otherwise use negation-aware heuristic with similarity.
+    Prefer NLI if enabled and available; otherwise use negation-aware heuristic with similarity.
     """
-    if NLI_AVAILABLE and nli_model is not None:
+    nli_model = _get_nli_model()
+    if nli_model is not None:
         try:
             scores = nli_model.predict([(claim, text)])
             if hasattr(scores, 'shape') and len(scores.shape) == 1 and scores.shape[0] == 3:
