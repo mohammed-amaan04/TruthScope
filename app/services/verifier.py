@@ -2,11 +2,21 @@ import logging
 from typing import Dict, Any
 import uuid
 import time
+import os
+import sys
 
 from app.services import preprocessor, scraper, matcher
 from app.models.schemas import VerificationRequest
 
 logger = logging.getLogger(__name__)
+
+# Add LLM folder to path to use source weighting logic
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'LLM'))
+try:
+    from news_source_weights import news_weights  # type: ignore
+except Exception as e:
+    news_weights = None  # type: ignore
+    logger.warning(f"Source weighting unavailable, falling back to count-based scoring: {e}")
 
 
 def calculate_verdict(confidence_score: float, truth_score: float) -> str:
@@ -30,13 +40,62 @@ def calculate_verdict(confidence_score: float, truth_score: float) -> str:
         return "INSUFFICIENT_DATA"
 
 
+def _compute_weighted_scores(claim_text: str, support: list, contradict: list) -> Dict[str, float]:
+    """Compute weighted truth and confidence using source weights if available."""
+    all_articles = support + contradict
+    if not all_articles:
+        return {"truth": 0.0, "confidence": 10.0}  # minimal confidence
+
+    # Quantity and diversity
+    unique_sources = set()
+    for a in all_articles:
+        domain = news_weights.extract_domain(a.get("link", a.get("url", ""))) if news_weights else None
+        if domain:
+            unique_sources.add(domain)
+
+    quantity_score = min(len(all_articles) / 10.0, 1.0)  # up to 10
+    diversity_score = min(len(unique_sources) / 5.0, 1.0) if unique_sources else 0.0
+
+    # Recency avg
+    recencies = []
+    if news_weights:
+        for a in all_articles:
+            recencies.append(news_weights.calculate_recency_factor(a.get("published_date", "")))
+    avg_recency = sum(recencies) / len(recencies) if recencies else 0.5
+
+    # Weighted truth
+    if news_weights:
+        claim_category = news_weights.get_category_from_claim(claim_text)
+        claim_region = news_weights.get_region_from_claim(claim_text)
+        total_w = 0.0
+        support_w = 0.0
+        for a in all_articles:
+            url = a.get("link", a.get("url", ""))
+            w = news_weights.calculate_source_weight(url, claim_category, claim_region)
+            sim = a.get("similarity_score", 0.5) or 0.5
+            rec = news_weights.calculate_recency_factor(a.get("published_date", ""))
+            combined = w * sim * rec
+            total_w += combined
+            if a in support:
+                support_w += combined
+        truth = (support_w / total_w * 100.0) if total_w > 0 else 0.0
+    else:
+        # Fallback: count-based
+        s = len(support)
+        t = len(support) + len(contradict)
+        truth = (s / t * 100.0) if t > 0 else 0.0
+
+    confidence = (0.4 * quantity_score + 0.3 * diversity_score + 0.3 * avg_recency) * 100.0
+    return {"truth": truth, "confidence": confidence}
+
+
 def verify_claim(request: VerificationRequest) -> Dict[str, Any]:
     """
     Main orchestrator for verifying claims:
     1. Preprocess claim
     2. Fetch articles
     3. Match semantically
-    4. Score based on matches
+    4. Score based on matches (weighted by credibility, expertise, region, recency)
     """
     claim_id = str(uuid.uuid4())
     logger.info(f"🆔 Verifying claim {claim_id}: {request.text}")
@@ -61,29 +120,18 @@ def verify_claim(request: VerificationRequest) -> Dict[str, Any]:
     match_elapsed = time.time() - match_start
     logger.info(f"⏱️ Matching time: {match_elapsed:.2f}s")
 
-    # Step 4: Score - New Computation Logic
-    logger.info("\n🎯 [STEP 4] Calculating Truth Score...")
+    # Step 4: Weighted Score
+    logger.info("\n🎯 [STEP 4] Calculating Weighted Scores...")
+    scores = _compute_weighted_scores(request.text, support, contradict)
+    truth_score = scores["truth"]
+    confidence_score = scores["confidence"]
 
-    # New Logic: x = articles with same meaning/intent, y = total contextual articles
-    # For now, we'll use supporting articles as "same meaning" and total as contextual
-    x = len(support)  # Articles that report the same thing (same meaning and intent)
-    y = len(support) + len(contradict)  # Total articles within context (70% threshold)
+    logger.info(f"📊 Supporting articles: {len(support)}")
+    logger.info(f"📊 Contradicting articles: {len(contradict)}")
+    logger.info(f"🎯 Truth Score (weighted): {truth_score:.1f}%")
+    logger.info(f"🎯 Confidence Score (composite): {confidence_score:.1f}%")
 
-    # Truth Score = x/y * 100
-    truth_score = (x / y * 100) if y > 0 else 0.0
-
-    # Confidence Score Logic
-    if y >= 10:
-        confidence_score = 100.0
-    else:
-        confidence_score = (y / 10) * 100
-
-    logger.info(f"📊 Supporting articles (x): {x}")
-    logger.info(f"📊 Total contextual articles (y): {y}")
-    logger.info(f"🎯 Truth Score: {truth_score:.1f}%")
-    logger.info(f"🎯 Confidence Score: {confidence_score:.1f}%")
-
-    # Verdict Calculation based on new criteria
+    # Verdict Calculation
     verdict = calculate_verdict(confidence_score, truth_score)
     logger.info(f"⚖️ Verdict: {verdict}")
 
@@ -92,7 +140,7 @@ def verify_claim(request: VerificationRequest) -> Dict[str, Any]:
         return {
             "url": article.get("link", ""),
             "title": article.get("title", ""),
-            "content": article.get("snippet", ""),  # Use snippet as content for now
+            "content": article.get("snippet", ""),
             "source": article.get("source", "Unknown"),
             "published_date": article.get("published_date", "Unknown"),
             "author": article.get("author"),
@@ -105,8 +153,8 @@ def verify_claim(request: VerificationRequest) -> Dict[str, Any]:
     return {
         "claim_id": claim_id,
         "preprocessing": preprocessing,
-        "truth_score": round(truth_score / 100, 4),  # Convert back to 0-1 scale for API compatibility
-        "confidence": round(confidence_score / 100, 2),  # Convert back to 0-1 scale for API compatibility
+        "truth_score": round(truth_score / 100, 4),
+        "confidence": round(confidence_score / 100, 2),
         "verdict": verdict,
         "matching_articles": transformed_support,
         "contradicting_articles": transformed_contradict,
