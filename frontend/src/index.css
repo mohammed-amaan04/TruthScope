@@ -99,7 +99,8 @@ body {
 .newspaper-divider {
   height: 2px;
   background-color: var(--newspaper-black);
-  margin: 1rem 0;
+  margin: 1rem auto;
+  display: block;
 }
 
 .newspaper-column {

@@ -77,7 +77,7 @@ async def fact_check(payload: dict = Body(...)):
     req = SimpleNamespace(text=text)
     basic_result = verifier.verify_claim(req)
 
-    # Build SimpleVerificationResult-compatible response (+compat keys)
+    # Build response compatible with Chrome extension expectations
     support = basic_result.get('matching_articles', [])
     contradict = basic_result.get('contradicting_articles', [])
 
@@ -86,6 +86,16 @@ async def fact_check(payload: dict = Body(...)):
         "confidence_score": basic_result.get('confidence', 0.0),
         "verdict": basic_result.get('verdict', 'INSUFFICIENT_DATA'),
         "summary": f"Found {len(support)} supporting and {len(contradict)} contradicting sources.",
+        # Chrome extension expects these field names
+        "matching_articles": [
+            {"source": a.get('source', 'Unknown'), "url": a.get('url'), "title": a.get('title', 'Untitled'), "similarity_score": a.get('similarity_score')}
+            for a in support[:10]
+        ],
+        "contradicting_articles": [
+            {"source": a.get('source', 'Unknown'), "url": a.get('url'), "title": a.get('title', 'Untitled'), "similarity_score": a.get('similarity_score')}
+            for a in contradict[:10]
+        ],
+        # Keep backward compatibility
         "supporting_sources": [
             {"source": a.get('source', 'Unknown'), "url": a.get('url'), "credibility_score": a.get('similarity_score')}
             for a in support[:10]

@@ -25,7 +25,7 @@ const HomePage = () => {
             <h1 className="newspaper-headline-bold text-5xl md:text-7xl text-newspaper-black mb-2">
               TRUTH SCOPE
             </h1>
-            <div className="newspaper-divider w-full max-w-2xl mx-auto"></div>
+            <div className="newspaper-divider max-w-2xl mx-auto"></div>
             <p className="newspaper-caption text-lg mt-2">
               A PLATFORM TO ANALYSE AND CRITICISE NEWS FROM AROUND THE WORLD
             </p>
