@@ -8,6 +8,8 @@ from typing import Dict, List, Optional, Tuple
 import re
 from urllib.parse import urlparse
 import json
+import time
+from datetime import datetime, timedelta
 
 @dataclass
 class SourceWeight:
@@ -21,6 +23,7 @@ class SourceWeight:
     languages: List[str]  # Languages of publication
     expertise_areas: List[str]  # Areas of specialized coverage
     verification_level: str  # 'verified', 'unverified', 'suspicious'
+    credibility_multiplier: float = 1.0  # Additional credibility boost
 
 class RegionalNewsMatcher:
     """Matches news content to relevant regional sources"""
@@ -204,7 +207,7 @@ class RegionalNewsMatcher:
                           detected_regions: List[str]) -> float:
         """
         Calculate regional boost multiplier for a source
-        Returns multiplier (1.0 = no boost, 1.5 = 50% boost, etc.)
+        Returns multiplier (1.0 = no boost, 1.8 = 80% boost, etc.)
         """
         if not detected_regions:
             return 1.0  # No regional relevance, no boost
@@ -220,8 +223,8 @@ class RegionalNewsMatcher:
             if region in self.regional_sources:
                 for regional_source in self.regional_sources[region]:
                     if regional_source in domain:
-                        # Source is from relevant region - give boost
-                        return 1.5  # 50% boost for regional expertise
+                        # Source is from relevant region - give significant boost
+                        return 1.8  # 80% boost for regional expertise
         
         return 1.0  # No regional match, no boost
 
@@ -233,67 +236,67 @@ class SourceWeights:
         self._initialize_weights()
     
     def _initialize_weights(self):
-        """Initialize the source weight database"""
+        """Initialize the source weight database with enhanced credibility multipliers"""
         self.source_weights = {
-            # International Premium Sources (High credibility, global reach)
-            'reuters.com': SourceWeight(0.95, 'international', 'center', 'excellent', 'high', 'global', ['en'], ['breaking_news', 'business', 'politics'], 'verified'),
-            'ap.org': SourceWeight(0.95, 'international', 'center', 'excellent', 'high', 'global', ['en'], ['breaking_news', 'politics', 'world_news'], 'verified'),
-            'bloomberg.com': SourceWeight(0.92, 'international', 'center', 'excellent', 'high', 'global', ['en'], ['business', 'finance', 'markets'], 'verified'),
-            'bbc.com': SourceWeight(0.90, 'international', 'center', 'excellent', 'high', 'global', ['en'], ['world_news', 'politics', 'culture'], 'verified'),
-            'aljazeera.com': SourceWeight(0.88, 'international', 'center-left', 'excellent', 'high', 'global', ['en', 'ar'], ['middle_east', 'world_news', 'politics'], 'verified'),
+            # International Premium Sources (Highest credibility, global reach)
+            'reuters.com': SourceWeight(0.98, 'international', 'center', 'excellent', 'high', 'global', ['en'], ['breaking_news', 'business', 'politics'], 'verified', 1.5),
+            'ap.org': SourceWeight(0.98, 'international', 'center', 'excellent', 'high', 'global', ['en'], ['breaking_news', 'politics', 'world_news'], 'verified', 1.5),
+            'bloomberg.com': SourceWeight(0.95, 'international', 'center', 'excellent', 'high', 'global', ['en'], ['business', 'finance', 'markets'], 'verified', 1.4),
+            'bbc.com': SourceWeight(0.93, 'international', 'center', 'excellent', 'high', 'global', ['en'], ['world_news', 'politics', 'culture'], 'verified', 1.4),
+            'aljazeera.com': SourceWeight(0.90, 'international', 'center-left', 'excellent', 'high', 'global', ['en', 'ar'], ['middle_east', 'world_news', 'politics'], 'verified', 1.3),
             
             # Regional Powerhouses (High credibility in their regions)
-            'cnn.com': SourceWeight(0.85, 'national', 'center-left', 'good', 'high', 'north_america', ['en'], ['breaking_news', 'politics', 'world_news'], 'verified'),
-            'foxnews.com': SourceWeight(0.80, 'national', 'center-right', 'good', 'high', 'north_america', ['en'], ['politics', 'breaking_news', 'opinion'], 'verified'),
-            'nbcnews.com': SourceWeight(0.83, 'national', 'center-left', 'good', 'high', 'north_america', ['en'], ['breaking_news', 'politics', 'investigative'], 'verified'),
-            'abcnews.go.com': SourceWeight(0.82, 'national', 'center', 'good', 'high', 'north_america', ['en'], ['breaking_news', 'politics', 'entertainment'], 'verified'),
-            'cbsnews.com': SourceWeight(0.81, 'national', 'center', 'good', 'high', 'north_america', ['en'], ['breaking_news', 'investigative', 'politics'], 'verified'),
+            'cnn.com': SourceWeight(0.88, 'national', 'center-left', 'good', 'high', 'north_america', ['en'], ['breaking_news', 'politics', 'world_news'], 'verified', 1.3),
+            'foxnews.com': SourceWeight(0.82, 'national', 'center-right', 'good', 'high', 'north_america', ['en'], ['politics', 'breaking_news', 'opinion'], 'verified', 1.2),
+            'nbcnews.com': SourceWeight(0.86, 'national', 'center-left', 'good', 'high', 'north_america', ['en'], ['breaking_news', 'politics', 'investigative'], 'verified', 1.3),
+            'abcnews.go.com': SourceWeight(0.85, 'national', 'center', 'good', 'high', 'north_america', ['en'], ['breaking_news', 'politics', 'entertainment'], 'verified', 1.2),
+            'cbsnews.com': SourceWeight(0.84, 'national', 'center', 'good', 'high', 'north_america', ['en'], ['breaking_news', 'investigative', 'politics'], 'verified', 1.2),
             
             # Regional News Leaders
-            'theguardian.com': SourceWeight(0.87, 'national', 'center-left', 'excellent', 'high', 'europe', ['en'], ['politics', 'investigative', 'culture'], 'verified'),
-            'lemonde.fr': SourceWeight(0.86, 'national', 'center', 'excellent', 'high', 'europe', ['fr'], ['politics', 'culture', 'world_news'], 'verified'),
-            'spiegel.de': SourceWeight(0.85, 'national', 'center-left', 'excellent', 'high', 'europe', ['de'], ['investigative', 'politics', 'world_news'], 'verified'),
-            'corriere.it': SourceWeight(0.84, 'national', 'center', 'good', 'high', 'europe', ['it'], ['politics', 'culture', 'world_news'], 'verified'),
-            'elpais.com': SourceWeight(0.83, 'national', 'center-left', 'good', 'high', 'europe', ['es'], ['politics', 'culture', 'world_news'], 'verified'),
+            'theguardian.com': SourceWeight(0.90, 'national', 'center-left', 'excellent', 'high', 'europe', ['en'], ['politics', 'investigative', 'culture'], 'verified', 1.3),
+            'lemonde.fr': SourceWeight(0.89, 'national', 'center', 'excellent', 'high', 'europe', ['fr'], ['politics', 'culture', 'world_news'], 'verified', 1.3),
+            'spiegel.de': SourceWeight(0.88, 'national', 'center-left', 'excellent', 'high', 'europe', ['de'], ['investigative', 'politics', 'world_news'], 'verified', 1.3),
+            'corriere.it': SourceWeight(0.87, 'national', 'center', 'good', 'high', 'europe', ['it'], ['politics', 'culture', 'world_news'], 'verified', 1.2),
+            'elpais.com': SourceWeight(0.86, 'national', 'center-left', 'good', 'high', 'europe', ['es'], ['politics', 'culture', 'world_news'], 'verified', 1.2),
             
             # Asian Regional Leaders
-            'scmp.com': SourceWeight(0.86, 'regional', 'center', 'excellent', 'high', 'asia', ['en'], ['asia_pacific', 'business', 'politics'], 'verified'),
-            'asahi.com': SourceWeight(0.85, 'national', 'center', 'excellent', 'high', 'asia', ['ja'], ['politics', 'world_news', 'culture'], 'verified'),
-            'thehindu.com': SourceWeight(0.84, 'national', 'center', 'excellent', 'high', 'asia', ['en'], ['politics', 'culture', 'world_news'], 'verified'),
-            'koreaherald.com': SourceWeight(0.83, 'national', 'center', 'good', 'high', 'asia', ['en'], ['politics', 'business', 'culture'], 'verified'),
-            'straitstimes.com': SourceWeight(0.82, 'national', 'center', 'good', 'high', 'asia', ['en'], ['asia_pacific', 'business', 'politics'], 'verified'),
+            'scmp.com': SourceWeight(0.89, 'regional', 'center', 'excellent', 'high', 'asia', ['en'], ['asia_pacific', 'business', 'politics'], 'verified', 1.3),
+            'asahi.com': SourceWeight(0.88, 'national', 'center', 'excellent', 'high', 'asia', ['ja'], ['politics', 'world_news', 'culture'], 'verified', 1.3),
+            'thehindu.com': SourceWeight(0.87, 'national', 'center', 'excellent', 'high', 'asia', ['en'], ['politics', 'culture', 'world_news'], 'verified', 1.3),
+            'koreaherald.com': SourceWeight(0.86, 'national', 'center', 'good', 'high', 'asia', ['en'], ['politics', 'business', 'culture'], 'verified', 1.2),
+            'straitstimes.com': SourceWeight(0.85, 'national', 'center', 'good', 'high', 'asia', ['en'], ['asia_pacific', 'business', 'politics'], 'verified', 1.2),
             
             # Middle East Regional Leaders
-            'haaretz.com': SourceWeight(0.85, 'national', 'center-left', 'excellent', 'high', 'middle_east', ['en', 'he'], ['politics', 'middle_east', 'world_news'], 'verified'),
-            'aljazeera.net': SourceWeight(0.84, 'regional', 'center-left', 'excellent', 'high', 'middle_east', ['ar', 'en'], ['middle_east', 'world_news', 'politics'], 'verified'),
-            'arabnews.com': SourceWeight(0.82, 'national', 'center', 'good', 'high', 'middle_east', ['en'], ['middle_east', 'business', 'politics'], 'verified'),
-            'tehrantimes.com': SourceWeight(0.80, 'national', 'center', 'good', 'medium', 'middle_east', ['en'], ['politics', 'middle_east', 'world_news'], 'verified'),
-            'hurriyet.com.tr': SourceWeight(0.81, 'national', 'center', 'good', 'medium', 'middle_east', ['tr'], ['politics', 'world_news', 'culture'], 'verified'),
+            'haaretz.com': SourceWeight(0.88, 'national', 'center-left', 'excellent', 'high', 'middle_east', ['en', 'he'], ['politics', 'middle_east', 'world_news'], 'verified', 1.3),
+            'aljazeera.net': SourceWeight(0.87, 'regional', 'center-left', 'excellent', 'high', 'middle_east', ['ar', 'en'], ['middle_east', 'world_news', 'politics'], 'verified', 1.3),
+            'arabnews.com': SourceWeight(0.85, 'national', 'center', 'good', 'high', 'middle_east', ['en'], ['middle_east', 'business', 'politics'], 'verified', 1.2),
+            'tehrantimes.com': SourceWeight(0.83, 'national', 'center', 'good', 'medium', 'middle_east', ['en'], ['politics', 'middle_east', 'world_news'], 'verified', 1.1),
+            'hurriyet.com.tr': SourceWeight(0.84, 'national', 'center', 'good', 'medium', 'middle_east', ['tr'], ['politics', 'world_news', 'culture'], 'verified', 1.1),
             
             # African Regional Leaders
-            'mg.co.za': SourceWeight(0.83, 'national', 'center-left', 'good', 'high', 'africa', ['en'], ['politics', 'africa', 'world_news'], 'verified'),
-            'vanguardngr.com': SourceWeight(0.81, 'national', 'center', 'good', 'medium', 'africa', ['en'], ['politics', 'africa', 'business'], 'verified'),
-            'nation.co.ke': SourceWeight(0.82, 'national', 'center', 'good', 'medium', 'africa', ['en'], ['politics', 'africa', 'world_news'], 'verified'),
-            'ethiopianreporter.com': SourceWeight(0.80, 'national', 'center', 'good', 'medium', 'africa', ['en'], ['politics', 'africa', 'culture'], 'verified'),
-            'ghanaweb.com': SourceWeight(0.79, 'national', 'center', 'good', 'medium', 'africa', ['en'], ['politics', 'africa', 'business'], 'verified'),
+            'mg.co.za': SourceWeight(0.86, 'national', 'center-left', 'good', 'high', 'africa', ['en'], ['politics', 'africa', 'world_news'], 'verified', 1.2),
+            'vanguardngr.com': SourceWeight(0.84, 'national', 'center', 'good', 'medium', 'africa', ['en'], ['politics', 'africa', 'business'], 'verified', 1.1),
+            'nation.co.ke': SourceWeight(0.85, 'national', 'center', 'good', 'medium', 'africa', ['en'], ['politics', 'africa', 'world_news'], 'verified', 1.1),
+            'ethiopianreporter.com': SourceWeight(0.83, 'national', 'center', 'good', 'medium', 'africa', ['en'], ['politics', 'africa', 'culture'], 'verified', 1.0),
+            'ghanaweb.com': SourceWeight(0.82, 'national', 'center', 'good', 'medium', 'africa', ['en'], ['politics', 'africa', 'business'], 'verified', 1.0),
             
             # Latin American Regional Leaders
-            'globo.com': SourceWeight(0.84, 'national', 'center', 'excellent', 'high', 'latin_america', ['pt'], ['politics', 'entertainment', 'sports'], 'verified'),
-            'clarin.com': SourceWeight(0.83, 'national', 'center', 'good', 'high', 'latin_america', ['es'], ['politics', 'culture', 'world_news'], 'verified'),
-            'emol.com': SourceWeight(0.82, 'national', 'center', 'good', 'high', 'latin_america', ['es'], ['politics', 'business', 'world_news'], 'verified'),
-            'eltiempo.com': SourceWeight(0.81, 'national', 'center', 'good', 'high', 'latin_america', ['es'], ['politics', 'culture', 'world_news'], 'verified'),
-            'elcomercio.pe': SourceWeight(0.80, 'national', 'center', 'good', 'medium', 'latin_america', ['es'], ['politics', 'business', 'world_news'], 'verified'),
+            'globo.com': SourceWeight(0.87, 'national', 'center', 'excellent', 'high', 'latin_america', ['pt'], ['politics', 'entertainment', 'sports'], 'verified', 1.2),
+            'clarin.com': SourceWeight(0.86, 'national', 'center', 'good', 'high', 'latin_america', ['es'], ['politics', 'culture', 'world_news'], 'verified', 1.2),
+            'emol.com': SourceWeight(0.85, 'national', 'center', 'good', 'high', 'latin_america', ['es'], ['politics', 'business', 'world_news'], 'verified', 1.2),
+            'eltiempo.com': SourceWeight(0.84, 'national', 'center', 'good', 'high', 'latin_america', ['es'], ['politics', 'culture', 'world_news'], 'verified', 1.1),
+            'elcomercio.pe': SourceWeight(0.83, 'national', 'center', 'good', 'medium', 'latin_america', ['es'], ['politics', 'business', 'world_news'], 'verified', 1.0),
             
             # Oceania Regional Leaders
-            'abc.net.au': SourceWeight(0.85, 'national', 'center', 'excellent', 'high', 'oceania', ['en'], ['politics', 'world_news', 'culture'], 'verified'),
-            'stuff.co.nz': SourceWeight(0.83, 'national', 'center', 'good', 'high', 'oceania', ['en'], ['politics', 'world_news', 'culture'], 'verified'),
-            'fijisun.com.fj': SourceWeight(0.78, 'national', 'center', 'good', 'medium', 'oceania', ['en'], ['politics', 'oceania', 'culture'], 'verified'),
-            'solomonstarnews.com': SourceWeight(0.76, 'national', 'center', 'good', 'medium', 'oceania', ['en'], ['politics', 'oceania', 'world_news'], 'verified'),
+            'abc.net.au': SourceWeight(0.88, 'national', 'center', 'excellent', 'high', 'oceania', ['en'], ['politics', 'world_news', 'culture'], 'verified', 1.2),
+            'stuff.co.nz': SourceWeight(0.86, 'national', 'center', 'good', 'high', 'oceania', ['en'], ['politics', 'world_news', 'culture'], 'verified', 1.1),
+            'fijisun.com.fj': SourceWeight(0.81, 'national', 'center', 'good', 'medium', 'oceania', ['en'], ['politics', 'oceania', 'culture'], 'verified', 1.0),
+            'solomonstarnews.com': SourceWeight(0.79, 'national', 'center', 'good', 'medium', 'oceania', ['en'], ['politics', 'oceania', 'world_news'], 'verified', 1.0),
             
             # Local/Regional Sources (Lower base weight but can get regional boost)
-            'localnews.com': SourceWeight(0.70, 'local', 'center', 'fair', 'medium', 'north_america', ['en'], ['local_news', 'community'], 'verified'),
-            'citytimes.com': SourceWeight(0.68, 'local', 'center', 'fair', 'medium', 'north_america', ['en'], ['local_news', 'community'], 'verified'),
-            'townherald.com': SourceWeight(0.65, 'local', 'center', 'fair', 'medium', 'north_america', ['en'], ['local_news', 'community'], 'verified'),
+            'localnews.com': SourceWeight(0.73, 'local', 'center', 'fair', 'medium', 'north_america', ['en'], ['local_news', 'community'], 'verified', 1.0),
+            'citytimes.com': SourceWeight(0.71, 'local', 'center', 'fair', 'medium', 'north_america', ['en'], ['local_news', 'community'], 'verified', 1.0),
+            'townherald.com': SourceWeight(0.68, 'local', 'center', 'fair', 'medium', 'north_america', ['en'], ['local_news', 'community'], 'verified', 1.0),
         }
     
     def get_source_weight(self, url: str, source_name: str = "", 
@@ -329,12 +332,124 @@ class SourceWeights:
                 region=base_weight.region,
                 languages=base_weight.languages,
                 expertise_areas=base_weight.expertise_areas,
-                verification_level=base_weight.verification_level
+                verification_level=base_weight.verification_level,
+                credibility_multiplier=base_weight.credibility_multiplier
             )
             
             return enhanced_weight
         
         return base_weight
+    
+    def calculate_balanced_score(self, sources: List[Dict], detected_regions: List[str]) -> float:
+        """
+        Calculate balanced score that prioritizes credibility, quantity, and regional expertise
+        """
+        if not sources:
+            return 0.0
+        
+        total_score = 0.0
+        credibility_bonus = 0.0
+        regional_bonus = 0.0
+        quantity_bonus = 0.0
+        
+        # Process each source
+        for source in sources:
+            source_url = source.get('url', '')
+            source_name = source.get('source', 'Unknown')
+            
+            # Get base source weight
+            source_weight_info = self.get_source_weight(
+                url=source_url,
+                source_name=source_name,
+                news_content="",  # We already have detected regions
+                news_title=""
+            )
+            
+            # Base weight with credibility multiplier
+            base_weight = source_weight_info.weight * source_weight_info.credibility_multiplier
+            
+            # Regional expertise bonus
+            regional_boost = self.regional_matcher.get_regional_boost(
+                source_url, source_name, detected_regions
+            )
+            
+            # Similarity score from the source
+            similarity_score = source.get('similarity_score', 0.5)
+            
+            # Calculate final source score
+            source_score = base_weight * regional_boost * similarity_score
+            total_score += source_score
+            
+            # Accumulate bonuses for analysis
+            credibility_bonus += source_weight_info.credibility_multiplier
+            regional_bonus += regional_boost
+            quantity_bonus += 1.0
+        
+        # Calculate averages
+        avg_credibility = credibility_bonus / len(sources) if sources else 0.0
+        avg_regional = regional_bonus / len(sources) if sources else 0.0
+        
+        # Apply quantity bonus (more sources = higher confidence)
+        quantity_multiplier = min(1.5, 1.0 + (len(sources) - 1) * 0.1)  # Max 50% bonus for quantity
+        
+        # Final balanced score
+        final_score = (total_score / len(sources)) * quantity_multiplier
+        
+        # Additional credibility bonus for high-credibility sources
+        if avg_credibility > 1.2:  # If average credibility is high
+            final_score *= 1.2  # 20% bonus
+        
+        # Regional expertise bonus (even if sources don't match region)
+        if avg_regional > 1.3:  # If sources have good regional expertise
+            final_score *= 1.1  # 10% bonus
+        
+        return min(1.0, final_score)  # Cap at 1.0
+    
+    def calculate_recency_factor(self, published_date: str) -> float:
+        """
+        Calculate recency factor for news articles
+        Returns multiplier based on how recent the article is
+        """
+        try:
+            if not published_date or published_date == "Unknown":
+                return 0.8  # Default for unknown dates
+            
+            # Handle relative time formats like "2 hours ago", "3 days ago"
+            if "ago" in published_date.lower():
+                if "hour" in published_date.lower():
+                    return 1.0  # Very recent
+                elif "day" in published_date.lower():
+                    return 0.95  # Recent
+                elif "week" in published_date.lower():
+                    return 0.9  # Moderately recent
+                elif "month" in published_date.lower():
+                    return 0.8  # Less recent
+                else:
+                    return 0.7  # Old
+            
+            # Handle ISO format dates
+            try:
+                from datetime import datetime
+                dt = datetime.fromisoformat(published_date.replace('Z', '+00:00'))
+                age_hours = (datetime.now() - dt).total_seconds() / 3600
+                
+                if age_hours < 1:
+                    return 1.0  # Less than 1 hour
+                elif age_hours < 6:
+                    return 0.98  # Less than 6 hours
+                elif age_hours < 24:
+                    return 0.95  # Less than 24 hours
+                elif age_hours < 72:
+                    return 0.9   # Less than 3 days
+                elif age_hours < 168:
+                    return 0.8   # Less than 1 week
+                else:
+                    return 0.7   # Older than 1 week
+            except:
+                return 0.8  # Fallback for parsing errors
+                
+        except Exception as e:
+            return 0.8  # Default fallback
     
     def _find_partial_match(self, domain: str) -> SourceWeight:
         """Find best partial match for domain"""
@@ -363,7 +478,8 @@ class SourceWeights:
             region='unknown',
             languages=['en'],
             expertise_areas=['general'],
-            verification_level='unverified'
+            verification_level='unverified',
+            credibility_multiplier=1.0
         )
     
     def get_regional_experts(self, region: str) -> List[str]:

@@ -41,52 +41,59 @@ def calculate_verdict(confidence_score: float, truth_score: float) -> str:
 
 
 def _compute_weighted_scores(claim_text: str, support: list, contradict: list) -> Dict[str, float]:
-    """Compute weighted truth and confidence using source weights if available."""
+    """Compute weighted truth and confidence using enhanced source weights and balanced scoring."""
     all_articles = support + contradict
     if not all_articles:
         return {"truth": 0.0, "confidence": 10.0}  # minimal confidence
 
-    # Quantity and diversity
-    unique_sources = set()
-    for a in all_articles:
-        domain = news_weights.extract_domain(a.get("link", a.get("url", ""))) if news_weights else None
-        if domain:
-            unique_sources.add(domain)
-
-    quantity_score = min(len(all_articles) / 10.0, 1.0)  # up to 10
-    diversity_score = min(len(unique_sources) / 5.0, 1.0) if unique_sources else 0.0
-
-    # Recency avg
-    recencies = []
-    if news_weights:
+    try:
+        # Import the enhanced source weights system
+        import sys
+        import os
+        sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'LLM'))
+        from news_source_weights import source_weights
+        
+        # Detect regions in the claim
+        detected_regions = source_weights.regional_matcher.detect_news_region(claim_text)
+        
+        # Use balanced scoring for both supporting and contradicting articles
+        support_score = source_weights.calculate_balanced_score(support, detected_regions) if support else 0.0
+        contradict_score = source_weights.calculate_balanced_score(contradict, detected_regions) if contradict else 0.0
+        
+        # Calculate truth score based on balanced scoring
+        total_score = support_score + contradict_score
+        if total_score > 0:
+            truth = (support_score / total_score) * 100.0
+        else:
+            truth = 0.0
+        
+        # Calculate confidence based on quantity, diversity, and recency
+        quantity_score = min(len(all_articles) / 8.0, 1.0)  # up to 8 articles
+        unique_sources = len(set(a.get("source", "") for a in all_articles))
+        diversity_score = min(unique_sources / 4.0, 1.0) if unique_sources else 0.0
+        
+        # Calculate average recency
+        recencies = []
         for a in all_articles:
-            recencies.append(news_weights.calculate_recency_factor(a.get("published_date", "")))
-    avg_recency = sum(recencies) / len(recencies) if recencies else 0.5
-
-    # Weighted truth
-    if news_weights:
-        claim_category = news_weights.get_category_from_claim(claim_text)
-        claim_region = news_weights.get_region_from_claim(claim_text)
-        total_w = 0.0
-        support_w = 0.0
-        for a in all_articles:
-            url = a.get("link", a.get("url", ""))
-            w = news_weights.calculate_source_weight(url, claim_category, claim_region)
-            sim = a.get("similarity_score", 0.5) or 0.5
-            rec = news_weights.calculate_recency_factor(a.get("published_date", ""))
-            combined = w * sim * rec
-            total_w += combined
-            if a in support:
-                support_w += combined
-        truth = (support_w / total_w * 100.0) if total_w > 0 else 0.0
-    else:
-        # Fallback: count-based
+            recency = source_weights.calculate_recency_factor(a.get("published_date", ""))
+            recencies.append(recency)
+        avg_recency = sum(recencies) / len(recencies) if recencies else 0.5
+        
+        # Weighted confidence calculation
+        confidence = (0.4 * quantity_score + 0.3 * diversity_score + 0.3 * avg_recency) * 100.0
+        
+        return {"truth": truth, "confidence": confidence}
+        
+    except Exception as e:
+        # Fallback to count-based scoring if enhanced system fails
         s = len(support)
         t = len(support) + len(contradict)
         truth = (s / t * 100.0) if t > 0 else 0.0
-
-    confidence = (0.4 * quantity_score + 0.3 * diversity_score + 0.3 * avg_recency) * 100.0
-    return {"truth": truth, "confidence": confidence}
+        
+        quantity_score = min(len(all_articles) / 10.0, 1.0)
+        confidence = quantity_score * 100.0
+        
+        return {"truth": truth, "confidence": confidence}
 
 
 def verify_claim(request: VerificationRequest) -> Dict[str, Any]:

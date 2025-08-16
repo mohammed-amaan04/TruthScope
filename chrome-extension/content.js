@@ -68,6 +68,9 @@ function showResultPanel(result, originalText) {
   const confidenceColor = getConfidenceColor(confidenceScore);
   const verdictDisplay = getVerdictDisplay(result.verdict);
   
+  // Cache indicator
+  const cacheIndicator = result.cached ? '<span class="veritas-cache-indicator">⚡ Cached</span>' : '';
+  
   panel.innerHTML = `
     <div class="veritas-header">
       <div class="veritas-logo">🔍 Veritas</div>
@@ -91,6 +94,7 @@ function showResultPanel(result, originalText) {
       
       <div class="veritas-verdict ${verdictDisplay.class}">
         <strong>Verdict:</strong> ${verdictDisplay.text}
+        ${cacheIndicator}
       </div>
       
       <div class="veritas-sources">

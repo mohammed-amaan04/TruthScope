@@ -155,14 +155,25 @@ class MultiSourceNewsFetcher:
         return articles
     
     def _calculate_enhanced_score(self, article: NewsArticle) -> float:
-        """Calculate enhanced weighted score with regional intelligence"""
-        base_score = article.source_weight
+        """Calculate enhanced weighted score with regional intelligence and balanced scoring"""
+        # Get source weight info with credibility multiplier
+        source_weight_info = source_weights.get_source_weight(
+            url=article.url,
+            source_name=article.source,
+            news_content=article.description,
+            news_title=article.title
+        )
+        
+        # Base score with credibility multiplier
+        base_score = source_weight_info.weight * source_weight_info.credibility_multiplier
         
         # Apply regional boost
         regional_score = base_score * article.regional_boost
         
-        # Time bonus (recent articles get slight boost)
-        time_bonus = self._calculate_time_bonus(article.published_at)
+        # Recency factor from source weights
+        recency_factor = source_weights.calculate_recency_factor(
+            article.published_at.strftime('%Y-%m-%d %H:%M:%S') if article.published_at else "Unknown"
+        )
         
         # Description quality bonus
         description_bonus = self._calculate_description_bonus(article.description)
@@ -170,8 +181,8 @@ class MultiSourceNewsFetcher:
         # Sentiment balance bonus (neutral articles get slight boost)
         sentiment_bonus = self._calculate_sentiment_bonus(article.sentiment_score)
         
-        # Final weighted score
-        final_score = regional_score + time_bonus + description_bonus + sentiment_bonus
+        # Final weighted score with recency factor
+        final_score = regional_score * recency_factor + description_bonus + sentiment_bonus
         
         return min(1.0, final_score)  # Cap at 1.0
     
@@ -285,12 +296,12 @@ class MultiSourceNewsFetcher:
         except Exception as e:
             print(f"MediaStack fetch error: {e}")
             return []
-    
+        
     async def _fetch_from_google_cse(self, category: str, max_articles: int) -> List[NewsArticle]:
         """Fetch news from Google Custom Search Engine"""
         try:
             url = "https://www.googleapis.com/customsearch/v1"
-            params = {
+                    params = {
                 'key': self.api_keys['google_cse'],
                 'cx': self.api_keys['google_cse_id'],
                 'q': f"news {category}",
@@ -299,8 +310,8 @@ class MultiSourceNewsFetcher:
             }
             
             async with self.session.get(url, params=params) as response:
-                if response.status == 200:
-                    data = await response.json()
+                        if response.status == 200:
+                            data = await response.json()
                     return self._parse_google_cse_response(data, max_articles)
                 else:
                     print(f"Google CSE error: {response.status}")
@@ -320,12 +331,12 @@ class MultiSourceNewsFetcher:
                 published_at = None
                 if item.get('publishedAt'):
                     published_at = datetime.fromisoformat(item['publishedAt'].replace('Z', '+00:00'))
-                
-                article = NewsArticle(
+                                
+                                article = NewsArticle(
                     title=item.get('title', ''),
-                    description=item.get('description', ''),
-                    url=item.get('url', ''),
-                    source=item.get('source', {}).get('name', 'Unknown'),
+                                    description=item.get('description', ''),
+                                    url=item.get('url', ''),
+                                    source=item.get('source', {}).get('name', 'Unknown'),
                     api_source='NewsAPI',
                     published_at=published_at,
                     image_url=item.get('urlToImage'),
@@ -381,9 +392,9 @@ class MultiSourceNewsFetcher:
                     detected_regions=[]  # Will be calculated later
                 )
                 articles.append(article)
-            except Exception as e:
+                except Exception as e:
                 print(f"Error parsing GNews article: {e}")
-                continue
+                    continue
         
         return articles
     
@@ -435,7 +446,7 @@ class MultiSourceNewsFetcher:
         for item in data['items'][:max_articles]:
             try:
                 # Google CSE doesn't provide publication date
-                article = NewsArticle(
+            article = NewsArticle(
                     title=item.get('title', ''),
                     description=item.get('snippet', ''),
                     url=item.get('link', ''),
@@ -454,8 +465,8 @@ class MultiSourceNewsFetcher:
                     weighted_score=0.0,  # Will be calculated later
                     regional_boost=1.0,  # Will be calculated later
                     detected_regions=[]  # Will be calculated later
-                )
-                articles.append(article)
+            )
+            articles.append(article)
             except Exception as e:
                 print(f"Error parsing Google CSE article: {e}")
                 continue
